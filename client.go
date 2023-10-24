@@ -238,7 +238,7 @@ func fmtDuration(d time.Duration) string {
 }
 
 func parseTime(t string) (time.Time, error) {
-	loc, _ := time.LoadLocation("Asia/Shanghai")
+	loc, _ := time.LoadLocation("Local")
 	date := time.Now().Format("2006-01-02")
 	return time.ParseInLocation("2006-01-02 15:04", date+" "+t, loc)
 }

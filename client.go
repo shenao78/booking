@@ -37,7 +37,7 @@ func (c *Client) Login() {
 
 		retryIfErr(func() error {
 			fmt.Printf("密码：")
-			p, err := term.ReadPassword(int(syscall.Stdin))
+			p, _ := term.ReadPassword(int(syscall.Stdin))
 			if len(p) == 0 {
 				return errors.New("无效的密码！")
 			}
@@ -76,7 +76,7 @@ func (c *Client) SetFormInfo() {
 	retryIfErr(func() error {
 		fmt.Printf("请输入锚地预约ID：")
 		var anchorId string
-		_, _ = fmt.Scanf("%s", &anchorId)
+		_, _ = fmt.Scanf("\n%s", &anchorId)
 		if len(anchorId) == 0 {
 			return errors.New("无效的锚地预约ID！")
 		}
@@ -100,7 +100,7 @@ func (c *Client) SetFormInfo() {
 	retryIfErr(func() error {
 		fmt.Printf("设置预约时间（格式：12:00）：")
 		var inputTime string
-		_, _ = fmt.Scanf("%s", &inputTime)
+		_, _ = fmt.Scanf("\n%s", &inputTime)
 		if len(inputTime) == 0 {
 			return errors.New("无效的时间！")
 		}

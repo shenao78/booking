@@ -12,7 +12,7 @@ import (
 
 const ApiURL = "https://zkpt.zj.msa.gov.cn/out-uaa-api/api/v1/"
 
-type commonResp struct {
+type CommonResp struct {
 	Status  uint64 `json:"status"`
 	Code    string `json:"code"`
 	Message string `json:"message"`
@@ -34,7 +34,7 @@ func GetCode() int64 {
 }
 
 type verifyCodeResp struct {
-	commonResp
+	CommonResp
 	Data string `json:"data"`
 }
 
@@ -55,7 +55,7 @@ func VerifyCode(code, key int64) error {
 }
 
 type loginResp struct {
-	commonResp
+	CommonResp
 	Data struct {
 		Token string `json:"token"`
 	} `json:"data"`
@@ -93,7 +93,7 @@ func Login(code, key int64, name, passwd string) (string, error) {
 
 func GetSessionID(token string) (string, error) {
 	url := "https://zkpt.zj.msa.gov.cn/trafficflow-api/api/v1/out/my-stuff-infos/unreadCount"
-	resp := &commonResp{}
+	resp := &CommonResp{}
 	header, err := GetWithHeader(url, map[string]string{"Authorization": token}, resp)
 	if err != nil {
 		return "", err
@@ -112,4 +112,34 @@ func GetSessionID(token string) (string, error) {
 		}
 	}
 	return "", errors.New("服务端未返回SessionId！")
+}
+
+type anchorageResp struct {
+	CommonResp
+	Data *Anchorage `json:"data"`
+}
+
+func GetAnchorage(anchorId, token, sessionId string) (*Anchorage, error) {
+	url := fmt.Sprintf("https://zkpt.zj.msa.gov.cn/trafficflow-api/api/v1/out/apply-anchorages/load/%s", anchorId)
+	resp := &anchorageResp{}
+	if _, err := GetWithHeader(url, map[string]string{"Authorization": token, "Cookie": sessionId}, resp); err != nil {
+		return nil, err
+	}
+	if resp.Status != 200 {
+		return nil, errors.New("获取锚地预约信息失败！")
+	}
+	if resp.Code != "10000" {
+		return nil, errors.New(resp.Message)
+	}
+	return resp.Data, nil
+}
+
+func Submit(anchorage *Anchorage, token, sessionId string) (*CommonResp, error) {
+	url := "https://zkpt.zj.msa.gov.cn/trafficflow-api/api/v1/out/apply-anchorages/saveData"
+	resp := &CommonResp{}
+	payload, _ := json.Marshal(anchorage)
+	if err := PostWithHeader(url, map[string]string{"Authorization": token, "Cookie": sessionId}, payload, resp); err != nil {
+		return nil, err
+	}
+	return resp, nil
 }

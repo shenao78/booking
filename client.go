@@ -3,6 +3,7 @@ package booking
 import (
 	"encoding/base64"
 	"fmt"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -17,6 +18,7 @@ type Client struct {
 	token       string
 	sessionId   string
 	bookingTime time.Time
+	anchorage   *Anchorage
 }
 
 func (c *Client) Login() {
@@ -72,21 +74,117 @@ func (c *Client) Login() {
 
 func (c *Client) SetFormInfo() {
 	retryIfErr(func() error {
-		fmt.Printf("设置抢票时间（格式：2023-10-22 12:00）：")
-		var inputDate, inputTime string
-		_, _ = fmt.Scanf("%s %s", &inputDate, &inputTime)
-		if len(inputTime) == 0 || len(inputTime) == 0 {
+		fmt.Printf("请输入锚地预约ID：")
+		var anchorId string
+		_, _ = fmt.Scanf("%s", &anchorId)
+		if len(anchorId) == 0 {
+			return errors.New("无效的锚地预约ID！")
+		}
+		anchorage, err := GetAnchorage(anchorId, c.token, c.getSessionId())
+		if err != nil {
+			return err
+		}
+		c.anchorage = anchorage
+		fmt.Println("-------------------------------------")
+		fmt.Printf(
+			"报告单位：%s\n船名：%s\n抛锚时间：%s\n离锚时间：%s\n",
+			anchorage.ApplyObject,
+			anchorage.ShipNameCh,
+			anchorage.ArrangeAnchorTime,
+			anchorage.ArrangeMoveAnchorTime,
+		)
+		fmt.Println("-------------------------------------")
+		return nil
+	})
+
+	retryIfErr(func() error {
+		fmt.Printf("设置预约时间（格式：12:00）：")
+		var inputTime string
+		_, _ = fmt.Scanf("%s", &inputTime)
+		if len(inputTime) == 0 {
 			return errors.New("无效的时间！")
 		}
-		bookingTime, err := parseTime(inputDate + " " + inputTime)
+		bookingTime, err := parseTime(inputTime)
 		if err != nil {
-			return errors.New("时间格式错误，请按照格式：2023-10-22 12:00")
+			return errors.New("时间格式错误，请按照格式：12:00")
+		}
+		if bookingTime.Before(time.Now()) {
+			return errors.New("预约时间必须大于当前时间！")
 		}
 		c.bookingTime = bookingTime
-		fmt.Println("抢票时间设置成功：", bookingTime.String())
+		fmt.Println("预约时间设置成功：", bookingTime.String())
 		return nil
 	})
 	go c.countdown()
+}
+
+func (c *Client) Submit() {
+	anchorage := c.anchorage
+	anchorage.IsSubmit = 1
+	// TODO fetch from getAnchorGroundList
+	anchorage.IsAnchGroundLimit = "1"
+	anchorage.DownUploadfileList = []File{}
+	if len(anchorage.FileList) != 0 {
+		anchorage.DownUploadfileList = anchorage.FileList
+	}
+	anchorage.StopReasonList = []interface{}{}
+	if anchorage.StopReason != nil {
+		reasons := strings.Split(anchorage.StopReason.(string), ",")
+		for _, r := range reasons {
+			anchorage.StopReasonList = append(anchorage.StopReasonList, r)
+		}
+	}
+	anchorage.DownUploadfileList = anchorage.FileList
+	duration := c.bookingTime.Sub(time.Now())
+	time.Sleep(duration)
+	fmt.Println("开始提交锚地预约！！！")
+
+	respCh := make(chan *CommonResp)
+	endCh := make(chan interface{})
+	c.parallelSubmit(anchorage, respCh, endCh, 10)
+	go func() {
+		time.Sleep(15 * time.Second)
+		close(endCh)
+	}()
+	for {
+		select {
+		case resp := <-respCh:
+			if resp.Status != 200 {
+				fmt.Println("提交锚地预约信息失败!")
+			} else if resp.Code != "10000" {
+				now := time.Now().Format("15:04:05")
+				fmt.Printf("[%s] %s\n", now, resp.Message)
+			} else {
+				close(endCh)
+				fmt.Println("恭喜！预约锚地成功！")
+				return
+			}
+		case <-endCh:
+			fmt.Println("15秒内未能预约成功，程序停止提交")
+			return
+		}
+	}
+}
+
+func (c *Client) parallelSubmit(anchorage *Anchorage, respCh chan *CommonResp, endCh chan interface{}, numProcessor int) {
+	for i := 0; i < numProcessor; i++ {
+		go func() {
+			for {
+				resp, err := Submit(anchorage, c.token, c.getSessionId())
+				if err != nil {
+					fmt.Println(err.Error())
+				}
+				select {
+				case <-endCh:
+					return
+				default:
+					if resp != nil {
+						respCh <- resp
+					}
+				}
+			}
+		}()
+	}
 }
 
 func (c *Client) setSessionId(sessionId string) {
@@ -115,11 +213,12 @@ func (c *Client) countdown() {
 	ticker := time.NewTicker(time.Second)
 	for ; true; <-ticker.C {
 		now := time.Now()
-		if now.Equal(c.bookingTime) || now.After(c.bookingTime) {
+		duration := c.bookingTime.Sub(now)
+		if int(duration.Seconds()) == 0 {
+			fmt.Println()
 			return
 		}
-		duration := c.bookingTime.Sub(now)
-		fmt.Printf("\r距离抢票开始还剩：%s", fmtDuration(duration))
+		fmt.Printf("\r距离预约开始还剩：%s", fmtDuration(duration))
 	}
 }
 
@@ -140,7 +239,8 @@ func fmtDuration(d time.Duration) string {
 
 func parseTime(t string) (time.Time, error) {
 	loc, _ := time.LoadLocation("Asia/Shanghai")
-	return time.ParseInLocation("2006-01-02 15:04", t, loc)
+	date := time.Now().Format("2006-01-02")
+	return time.ParseInLocation("2006-01-02 15:04", date+" "+t, loc)
 }
 
 func retryIfErr(fun func() error) {

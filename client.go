@@ -149,14 +149,14 @@ func (c *Client) Submit() {
 	for {
 		select {
 		case resp := <-respCh:
+			now := time.Now().Format("15:04:05")
 			if resp.Status != 200 {
-				fmt.Println("提交锚地预约信息失败!")
+				fmt.Printf("[%s] 提交锚地预约信息失败!\n", now)
 			} else if resp.Code != "10000" {
-				now := time.Now().Format("15:04:05")
 				fmt.Printf("[%s] %s\n", now, resp.Message)
 			} else {
 				close(endCh)
-				fmt.Println("恭喜！预约锚地成功！")
+				fmt.Printf("[%s] 恭喜！预约锚地成功！\n", now)
 				return
 			}
 		case <-endCh:

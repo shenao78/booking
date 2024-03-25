@@ -3,7 +3,7 @@ package booking
 import (
 	"encoding/base64"
 	"fmt"
-	"strings"
+	"os"
 	"sync"
 	"syscall"
 	"time"
@@ -15,10 +15,10 @@ import (
 
 type Client struct {
 	sync.RWMutex
-	token       string
-	sessionId   string
-	bookingTime time.Time
-	anchorage   *Anchorage
+	token     string
+	sessionId string
+	duration  time.Duration
+	anchorage *Anchorage
 }
 
 func (c *Client) Login() {
@@ -72,6 +72,14 @@ func (c *Client) Login() {
 	go c.refreshSessionId()
 }
 
+func readUserPass() (string, string, error) {
+	file, err := os.Open("auth.txt")
+	if err != nil {
+		return "", "", err
+	}
+	defer file.Close()
+}
+
 func (c *Client) SetFormInfo() {
 	retryIfErr(func() error {
 		fmt.Printf("请输入锚地预约ID：")
@@ -98,52 +106,28 @@ func (c *Client) SetFormInfo() {
 	})
 
 	retryIfErr(func() error {
-		fmt.Printf("设置预约时间（格式：12:00）：")
-		var inputTime string
-		_, _ = fmt.Scanf("\n%s", &inputTime)
-		if len(inputTime) == 0 {
+		fmt.Printf("设置持续时间间隔 （单位：分钟）：")
+		var inputMinutes uint64
+		_, _ = fmt.Scanf("\n%d", &inputMinutes)
+		if inputMinutes == 0 {
 			return errors.New("无效的时间！")
 		}
-		bookingTime, err := parseTime(inputTime)
-		if err != nil {
-			return errors.New("时间格式错误，请按照格式：12:00")
-		}
-		if bookingTime.Before(time.Now()) {
-			return errors.New("预约时间必须大于当前时间！")
-		}
-		c.bookingTime = bookingTime
-		fmt.Println("预约时间设置成功：", bookingTime.String())
+		c.duration = time.Minute * time.Duration(inputMinutes)
 		return nil
 	})
-	go c.countdown()
 }
 
 func (c *Client) Submit() {
 	anchorage := c.anchorage
-	anchorage.IsSubmit = 1
-	// TODO fetch from getAnchorGroundList
-	anchorage.IsAnchGroundLimit = "1"
-	anchorage.DownUploadfileList = []File{}
-	if len(anchorage.FileList) != 0 {
-		anchorage.DownUploadfileList = anchorage.FileList
-	}
-	anchorage.StopReasonList = []interface{}{}
-	if anchorage.StopReason != nil {
-		reasons := strings.Split(anchorage.StopReason.(string), ",")
-		for _, r := range reasons {
-			anchorage.StopReasonList = append(anchorage.StopReasonList, r)
-		}
-	}
-	anchorage.DownUploadfileList = anchorage.FileList
-	duration := c.bookingTime.Sub(time.Now())
-	time.Sleep(duration)
+	anchorage.normalize()
+
 	fmt.Println("开始提交锚地预约！！！")
 
 	respCh := make(chan *CommonResp)
 	endCh := make(chan interface{})
 	c.parallelSubmit(anchorage, respCh, endCh, 10)
 	go func() {
-		time.Sleep(15 * time.Second)
+		time.Sleep(c.duration)
 		close(endCh)
 	}()
 	for {
@@ -160,7 +144,7 @@ func (c *Client) Submit() {
 				return
 			}
 		case <-endCh:
-			fmt.Println("15秒内未能预约成功，程序停止提交")
+			fmt.Printf("%d分钟未能预约成功，程序停止提交\n", int64(c.duration.Minutes()))
 			return
 		}
 	}
@@ -207,40 +191,6 @@ func (c *Client) refreshSessionId() {
 			c.setSessionId(sessionId)
 		}
 	}
-}
-
-func (c *Client) countdown() {
-	ticker := time.NewTicker(time.Second)
-	for ; true; <-ticker.C {
-		now := time.Now()
-		duration := c.bookingTime.Sub(now)
-		if int(duration.Seconds()) == 0 {
-			fmt.Println()
-			return
-		}
-		fmt.Printf("\r距离预约开始还剩：%s", fmtDuration(duration))
-	}
-}
-
-func fmtDuration(d time.Duration) string {
-	var result string
-	hour := int64(d.Hours())
-	if hour != 0 {
-		result += fmt.Sprintf("%d小时", hour)
-	}
-	minutes := int64(d.Minutes()) % 60
-	if minutes != 0 {
-		result += fmt.Sprintf("%d分", minutes)
-	}
-	sec := int64(d.Seconds()) % 60
-	result += fmt.Sprintf("%d秒", sec)
-	return result
-}
-
-func parseTime(t string) (time.Time, error) {
-	loc, _ := time.LoadLocation("Local")
-	date := time.Now().Format("2006-01-02")
-	return time.ParseInLocation("2006-01-02 15:04", date+" "+t, loc)
 }
 
 func retryIfErr(fun func() error) {

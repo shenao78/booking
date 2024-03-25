@@ -1,5 +1,7 @@
 package booking
 
+import "strings"
+
 type Anchorage struct {
 	Id                        interface{}   `json:"id"`
 	ApplyNumber               interface{}   `json:"applyNumber"`
@@ -109,4 +111,22 @@ type File struct {
 	FileSize   interface{} `json:"fileSize"`
 	BucketName interface{} `json:"bucketName"`
 	Remark     interface{} `json:"remark"`
+}
+
+func (c *Anchorage) normalize() {
+	c.IsSubmit = 1
+	// TODO fetch from getAnchorGroundList
+	c.IsAnchGroundLimit = "1"
+	c.DownUploadfileList = []File{}
+	if len(c.FileList) != 0 {
+		c.DownUploadfileList = c.FileList
+	}
+	c.StopReasonList = []interface{}{}
+	if c.StopReason != nil {
+		reasons := strings.Split(c.StopReason.(string), ",")
+		for _, r := range reasons {
+			c.StopReasonList = append(c.StopReasonList, r)
+		}
+	}
+	c.DownUploadfileList = c.FileList
 }

@@ -3,14 +3,15 @@ package booking
 import (
 	"encoding/base64"
 	"fmt"
+	"golang.org/x/term"
+	"io"
 	"os"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
 
 	"github.com/pkg/errors"
-
-	"golang.org/x/term"
 )
 
 type Client struct {
@@ -26,28 +27,34 @@ func (c *Client) Login() {
 	retryIfErr(func() error {
 		var err error
 		var userName, passwd string
-		retryIfErr(func() error {
-			fmt.Printf("用户名：")
-			n, err := fmt.Scanf("%s", &userName)
-			if n == 0 {
-				return errors.New("无效的用户名！")
-			}
-			return err
-		})
 
-		retryIfErr(func() error {
-			fmt.Printf("密码：")
-			p, _ := term.ReadPassword(int(syscall.Stdin))
-			if len(p) == 0 {
-				return errors.New("无效的密码！")
-			}
-			p, err = AESEncrypt(p, []byte("zjmsa_allhigh@12"))
-			if err != nil {
-				return errors.Wrap(err, "无效的密码！")
-			}
-			passwd = base64.StdEncoding.EncodeToString(p)
-			return nil
-		})
+		userName, passwd, err = readUserPass()
+		if err != nil {
+			fmt.Println("读取用户密码文件失败，请手动输入")
+			retryIfErr(func() error {
+				fmt.Printf("用户名：")
+				n, err := fmt.Scanf("%s", &userName)
+				if n == 0 {
+					return errors.New("无效的用户名！")
+				}
+				return err
+			})
+
+			retryIfErr(func() error {
+				fmt.Printf("密码：")
+				p, _ := term.ReadPassword(syscall.Stdin)
+				if len(p) == 0 {
+					return errors.New("无效的密码！")
+				}
+				p, err = AESEncrypt(p, []byte("zjmsa_allhigh@12"))
+				if err != nil {
+					return errors.Wrap(err, "无效的密码！")
+				}
+				passwd = base64.StdEncoding.EncodeToString(p)
+				return nil
+			})
+			writeUserPass(userName, passwd)
+		}
 
 		var code, key int64
 		retryIfErr(func() error {
@@ -78,6 +85,32 @@ func readUserPass() (string, string, error) {
 		return "", "", err
 	}
 	defer file.Close()
+
+	data, err := io.ReadAll(file)
+	if err != nil {
+		return "", "", err
+	}
+	data, err = base64.StdEncoding.DecodeString(string(data))
+	if err != nil {
+		return "", "", err
+	}
+	auth := strings.Split(string(data), " ")
+	if len(auth) != 2 {
+		return "", "", errors.New("invalid auth")
+	}
+	return auth[0], auth[1], nil
+}
+
+func writeUserPass(user, pass string) {
+	file, err := os.Create("auth.txt")
+	if err != nil {
+		panic(err)
+	}
+	defer file.Close()
+	auth := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s %s", user, pass)))
+	if _, err := file.Write([]byte(auth)); err != nil {
+		panic(err)
+	}
 }
 
 func (c *Client) SetFormInfo() {

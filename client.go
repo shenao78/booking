@@ -6,6 +6,7 @@ import (
 	"golang.org/x/term"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"syscall"
@@ -80,7 +81,9 @@ func (c *Client) Login() {
 }
 
 func readUserPass() (string, string, error) {
-	file, err := os.Open("auth.txt")
+	exec, _ := os.Executable()
+	path := filepath.Join(filepath.Dir(exec), "auth.txt")
+	file, err := os.Open(path)
 	if err != nil {
 		return "", "", err
 	}
@@ -102,7 +105,9 @@ func readUserPass() (string, string, error) {
 }
 
 func writeUserPass(user, pass string) {
-	file, err := os.Create("auth.txt")
+	exec, _ := os.Executable()
+	path := filepath.Join(filepath.Dir(exec), "auth.txt")
+	file, err := os.Create(path)
 	if err != nil {
 		panic(err)
 	}
@@ -115,9 +120,9 @@ func writeUserPass(user, pass string) {
 
 func (c *Client) SetFormInfo() {
 	retryIfErr(func() error {
-		fmt.Printf("请输入锚地预约ID：")
+		fmt.Printf("\n请输入锚地预约ID：")
 		var anchorId string
-		_, _ = fmt.Scanf("\n%s", &anchorId)
+		_, _ = fmt.Scanf("%s", &anchorId)
 		if len(anchorId) == 0 {
 			return errors.New("无效的锚地预约ID！")
 		}
@@ -139,9 +144,9 @@ func (c *Client) SetFormInfo() {
 	})
 
 	retryIfErr(func() error {
-		fmt.Printf("设置持续时间间隔 （单位：分钟）：")
+		fmt.Printf("\n设置持续时间间隔 （单位：分钟）：")
 		var inputMinutes uint64
-		_, _ = fmt.Scanf("\n%d", &inputMinutes)
+		_, _ = fmt.Scanf("%d", &inputMinutes)
 		if inputMinutes == 0 {
 			return errors.New("无效的时间！")
 		}

@@ -52,7 +52,7 @@ func requestWithHeader(method, url string, header map[string]string, payload []b
 		req.Header.Set(k, v)
 	}
 
-	client := &http.Client{Timeout: 20 * time.Second}
+	client := &http.Client{Timeout: time.Millisecond * 500}
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err

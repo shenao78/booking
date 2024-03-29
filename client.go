@@ -42,7 +42,7 @@ func (c *Client) Login() {
 
 			retryIfErr(func() error {
 				fmt.Printf("密码：")
-				p, _ := term.ReadPassword(syscall.Stdin)
+				p, _ := term.ReadPassword(int(syscall.Stdin))
 				if len(p) == 0 {
 					return errors.New("无效的密码！")
 				}
@@ -158,7 +158,7 @@ func (c *Client) Submit() {
 
 	respCh := make(chan *CommonResp)
 	endCh := make(chan interface{})
-	c.parallelSubmit(anchorage, respCh, endCh, 10)
+	c.parallelSubmit(anchorage, respCh, endCh, 20)
 	go func() {
 		time.Sleep(c.duration)
 		close(endCh)

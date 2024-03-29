@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -28,9 +27,7 @@ func GetCode() int64 {
 	if err != nil {
 		panic(errors.Wrap(err, "获取验证码"))
 	}
-	exec, _ := os.Executable()
-	file := filepath.Join(filepath.Dir(exec), "code.jpg")
-	if err := os.WriteFile(file, img, 0644); err != nil {
+	if err := os.WriteFile("code.jpg", img, 0644); err != nil {
 		panic(errors.Wrap(err, "保存验证码"))
 	}
 	return key

@@ -1,10 +1,11 @@
 package booking
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	imgcat "github.com/martinlindhe/imgcat/lib"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -28,10 +29,8 @@ func GetCode() int64 {
 	if err != nil {
 		panic(errors.Wrap(err, "获取验证码"))
 	}
-	exec, _ := os.Executable()
-	file := filepath.Join(filepath.Dir(exec), "code.jpg")
-	if err := os.WriteFile(file, img, 0644); err != nil {
-		panic(errors.Wrap(err, "保存验证码"))
+	if err := imgcat.Cat(bytes.NewBuffer(img), os.Stdout); err != nil {
+		panic(errors.Wrap(err, "写入验证码到终端失败！"))
 	}
 	return key
 }
@@ -90,7 +89,6 @@ func Login(code, key int64, name, passwd string) (string, error) {
 	if resp.Code != "10000" {
 		return "", errors.New(resp.Message)
 	}
-	fmt.Println("登录成功")
 	return resp.Data.Token, nil
 }
 

@@ -30,17 +30,17 @@ func (x ecbEncrypter) CryptBlocks(dst, src []byte) {
 	}
 }
 
-func AESEncrypt(origData, key []byte) ([]byte, error) {
+func AESEncrypt(origData, key []byte) []byte {
 	block, err := aes.NewCipher(key)
 	if err != nil {
-		return nil, err
+		panic(err)
 	}
 	blockSize := block.BlockSize()
 	origData = pkcs7Padding(origData, blockSize)
 	blockMode := newECBEncrypter(block)
 	crypted := make([]byte, len(origData))
 	blockMode.CryptBlocks(crypted, origData)
-	return crypted, nil
+	return crypted
 }
 
 func pkcs7Padding(ciphertext []byte, blockSize int) []byte {

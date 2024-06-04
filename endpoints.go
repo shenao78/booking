@@ -126,7 +126,7 @@ func GetAnchorage(anchorId, token, sessionId string) (*Anchorage, error) {
 	if _, err := GetWithHeader(url, map[string]string{"Authorization": token, "Cookie": sessionId}, resp); err != nil {
 		return nil, err
 	}
-	if resp.Status != 200 {
+	if resp.Status != 200 || resp.Data == nil {
 		return nil, errors.New("获取锚地预约信息失败！")
 	}
 	if resp.Code != "10000" {
